@@ -70,8 +70,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 npm run dev
 ```
 7. Initialize Gitgit init
+
 ```
 git add .
 git commit -m "Initial commit: Angler's Log React Migration with Tailwind v4"
+
+git remote add origin [https://github.com/shijiema/anglers-log.git](https://github.com/shijiema/anglers-log.git)
+
+# Push the code
+git push -u origin main
 ```
 
+8. Deployment (Optional)
+
+Once your code is on GitHub, you can connect your repository to Vercel or Netlify. They will automatically detect the Vite setup and provide you with a live URL to open on your iPhone!

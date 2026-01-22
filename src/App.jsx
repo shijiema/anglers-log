@@ -14,7 +14,10 @@ import {
   Navigation,
   HardDrive,
   List,
-  ChevronDown
+  ChevronDown,
+  Edit2,
+  CheckCircle2,
+  Circle
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -90,15 +93,18 @@ const App = () => {
   const [view, setView] = useState('dashboard');
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editingLog, setEditingLog] = useState(null);
   const [filters, setFilters] = useState({
     location: 'All',
     startDate: '',
     endDate: ''
   });
 
-  // Pagination State
+  // Pagination & Multi-select State
   const [dashboardLimit, setDashboardLimit] = useState(10);
   const [reportLimit, setReportLimit] = useState(10);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isSelectMode, setIsSelectMode] = useState(false);
 
   // --- Initialize & Load Local DB Data ---
   useEffect(() => {
@@ -127,33 +133,63 @@ const App = () => {
   }, [filters]);
 
   // --- Handlers ---
-  const addLog = async (newLog) => {
+  const saveLog = async (logData) => {
     try {
       const db = await openDB();
       const transaction = db.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
-      const request = store.add(newLog);
-      request.onsuccess = () => {
-        setLogs(prev => [ { ...newLog, id: request.result }, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date)));
-        setView('dashboard');
-      };
+      
+      let request;
+      if (editingLog) {
+        const updatedLog = { ...logData, id: editingLog.id };
+        request = store.put(updatedLog);
+        request.onsuccess = () => {
+          setLogs(prev => prev.map(l => l.id === editingLog.id ? updatedLog : l).sort((a, b) => new Date(b.date) - new Date(a.date)));
+          setEditingLog(null);
+          setView('dashboard');
+        };
+      } else {
+        request = store.add(logData);
+        request.onsuccess = () => {
+          setLogs(prev => [ { ...logData, id: request.result }, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date)));
+          setView('dashboard');
+        };
+      }
     } catch (e) {
       console.error("Local save failed", e);
     }
   };
 
-  const deleteLog = async (id) => {
-    if (window.confirm("Delete this catch from your device?")) {
+  const deleteLogs = async (idsToDelete) => {
+    const count = idsToDelete.length;
+    if (window.confirm(`Delete ${count} catch${count > 1 ? 'es' : ''} from your device?`)) {
       try {
         const db = await openDB();
         const transaction = db.transaction(STORE_NAME, 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
-        store.delete(id);
-        setLogs(prev => prev.filter(log => log.id !== id));
+        
+        idsToDelete.forEach(id => store.delete(id));
+        
+        transaction.oncomplete = () => {
+          setLogs(prev => prev.filter(log => !idsToDelete.includes(log.id)));
+          setSelectedIds([]);
+          setIsSelectMode(false);
+        };
       } catch (e) {
         console.error("Local delete failed", e);
       }
     }
+  };
+
+  const startEditing = (log) => {
+    setEditingLog(log);
+    setView('log');
+  };
+
+  const toggleSelection = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
   };
 
   // --- Analytics Logic ---
@@ -218,12 +254,23 @@ const App = () => {
             {view === 'dashboard' && (
               <Dashboard 
                 logs={logs} 
-                onDelete={deleteLog} 
+                onDelete={deleteLogs} 
+                onEdit={startEditing}
                 limit={dashboardLimit} 
                 setLimit={setDashboardLimit} 
+                selectedIds={selectedIds}
+                isSelectMode={isSelectMode}
+                setIsSelectMode={setIsSelectMode}
+                toggleSelection={toggleSelection}
               />
             )}
-            {view === 'log' && <LogForm onSave={addLog} />}
+            {view === 'log' && (
+              <LogForm 
+                onSave={saveLog} 
+                editingLog={editingLog} 
+                onCancel={() => { setEditingLog(null); setView('dashboard'); }} 
+              />
+            )}
             {view === 'analysis' && (
               <Analysis 
                 logs={filteredLogs} 
@@ -242,9 +289,9 @@ const App = () => {
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-50">
         <div className="max-w-md mx-auto flex justify-between items-center">
-          <NavButton active={view === 'dashboard'} icon={<Home />} label="Home" onClick={() => setView('dashboard')} />
-          <NavButton active={view === 'log'} icon={<PlusCircle />} label="Log" onClick={() => setView('log')} />
-          <NavButton active={view === 'analysis'} icon={<BarChart3 />} label="Report" onClick={() => setView('analysis')} />
+          <NavButton active={view === 'dashboard'} icon={<Home />} label="Home" onClick={() => { setView('dashboard'); setEditingLog(null); }} />
+          <NavButton active={view === 'log'} icon={<PlusCircle />} label="Log" onClick={() => { setView('log'); setEditingLog(null); }} />
+          <NavButton active={view === 'analysis'} icon={<BarChart3 />} label="Report" onClick={() => { setView('analysis'); setEditingLog(null); }} />
         </div>
       </nav>
     </div>
@@ -258,7 +305,17 @@ const NavButton = ({ active, icon, label, onClick }) => (
   </button>
 );
 
-const Dashboard = ({ logs, onDelete, limit, setLimit }) => {
+const Dashboard = ({ 
+  logs, 
+  onDelete, 
+  onEdit, 
+  limit, 
+  setLimit, 
+  selectedIds, 
+  isSelectMode, 
+  setIsSelectMode, 
+  toggleSelection 
+}) => {
   const displayedLogs = logs.slice(0, limit);
   const hasMore = logs.length > limit;
 
@@ -270,14 +327,63 @@ const Dashboard = ({ logs, onDelete, limit, setLimit }) => {
       </div>
 
       <div className="space-y-4">
-        <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">⏱️ Recent Activity</h2>
+        <div className="flex justify-between items-end px-1">
+          <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">⏱️ Recent Activity</h2>
+          {logs.length > 0 && (
+            <div className="flex gap-2">
+              {isSelectMode ? (
+                <>
+                  <button 
+                    onClick={() => onDelete(selectedIds)}
+                    disabled={selectedIds.length === 0}
+                    className="text-[10px] font-bold uppercase px-3 py-1.5 bg-red-100 text-red-600 rounded-lg disabled:opacity-50"
+                  >
+                    Delete ({selectedIds.length})
+                  </button>
+                  <button 
+                    onClick={() => setIsSelectMode(false)}
+                    className="text-[10px] font-bold uppercase px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => setIsSelectMode(true)}
+                  className="text-[10px] font-bold uppercase px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  Select to Delete
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {logs.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-slate-200 text-slate-400">
             No logs found on this device. Catch something!
           </div>
         ) : (
           <>
-            {displayedLogs.map(log => <LogCard key={log.id} log={log} onDelete={onDelete} />)}
+            {displayedLogs.map(log => (
+              <div key={log.id} className="relative flex items-center gap-3">
+                {isSelectMode && (
+                  <button 
+                    onClick={() => toggleSelection(log.id)}
+                    className={`transition-colors ${selectedIds.includes(log.id) ? 'text-blue-600' : 'text-slate-300'}`}
+                  >
+                    {selectedIds.includes(log.id) ? <CheckCircle2 className="w-6 h-6 fill-blue-50" /> : <Circle className="w-6 h-6" />}
+                  </button>
+                )}
+                <div className="flex-1">
+                  <LogCard 
+                    log={log} 
+                    onDelete={isSelectMode ? null : () => onDelete([log.id])} 
+                    onEdit={isSelectMode ? null : onEdit}
+                  />
+                </div>
+              </div>
+            ))}
             {hasMore && (
               <button 
                 onClick={() => setLimit(prev => prev + 10)}
@@ -293,8 +399,8 @@ const Dashboard = ({ logs, onDelete, limit, setLimit }) => {
   );
 };
 
-const LogCard = ({ log, onDelete }) => (
-  <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:border-blue-200 transition-all">
+const LogCard = ({ log, onDelete, onEdit }) => (
+  <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:border-blue-200 transition-all w-full">
     {log.photos && log.photos.length > 0 && (
       <div className="flex gap-1 h-44 overflow-x-auto p-2 bg-slate-50 border-b border-slate-100 scrollbar-hide">
         {log.photos.map((img, i) => (
@@ -315,11 +421,18 @@ const LogCard = ({ log, onDelete }) => (
       </div>
       <div className="text-right flex flex-col items-end gap-2">
         <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">{log.weight} lbs</span>
-        {onDelete && (
-          <button onClick={() => onDelete(log.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-            <Trash2 className="w-4 h-4" />
-          </button>
-        )}
+        <div className="flex gap-1">
+          {onEdit && (
+            <button onClick={() => onEdit(log)} className="p-2 text-slate-300 hover:text-blue-500 transition-colors">
+              <Edit2 className="w-4 h-4" />
+            </button>
+          )}
+          {onDelete && (
+            <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
     {log.coords && (
@@ -332,9 +445,9 @@ const LogCard = ({ log, onDelete }) => (
   </div>
 );
 
-const LogForm = ({ onSave }) => {
-  const [photos, setPhotos] = useState([]);
-  const [coords, setCoords] = useState(null);
+const LogForm = ({ onSave, editingLog, onCancel }) => {
+  const [photos, setPhotos] = useState(editingLog?.photos || []);
+  const [coords, setCoords] = useState(editingLog?.coords || null);
   const [gettingLoc, setGettingLoc] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const cameraInputRef = useRef(null);
@@ -383,7 +496,14 @@ const LogForm = ({ onSave }) => {
   return (
     <div className="animate-in fade-in duration-500 space-y-6 pb-4">
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <h2 className="font-bold text-xl text-slate-800 mb-6 text-center">New Catch Log</h2>
+        <div className="flex justify-between items-center mb-6">
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X className="w-6 h-6" />
+          </button>
+          <h2 className="font-bold text-xl text-slate-800 text-center">{editingLog ? 'Edit Catch' : 'New Catch Log'}</h2>
+          <div className="w-6" />
+        </div>
+        
         <form onSubmit={(e) => {
           e.preventDefault();
           if (isProcessing) return;
@@ -430,21 +550,21 @@ const LogForm = ({ onSave }) => {
           </div>
 
           <div className="space-y-4">
-            <InputField name="species" label="Species" placeholder="What was it?" required icon={<Fish className="w-4 h-4" />} />
+            <InputField name="species" label="Species" placeholder="What was it?" required icon={<Fish className="w-4 h-4" />} defaultValue={editingLog?.species} />
             <div className="grid grid-cols-2 gap-4">
-              <InputField name="weight" label="Weight (lbs)" placeholder="0.0" type="number" step="0.1" icon={<Scale className="w-4 h-4" />} />
-              <InputField name="date" label="Date" type="date" defaultValue={new Date().toISOString().split('T')[0]} icon={<Calendar className="w-4 h-4" />} />
+              <InputField name="weight" label="Weight (lbs)" placeholder="0.0" type="number" step="0.1" icon={<Scale className="w-4 h-4" />} defaultValue={editingLog?.weight} />
+              <InputField name="date" label="Date" type="date" defaultValue={editingLog?.date || new Date().toISOString().split('T')[0]} icon={<Calendar className="w-4 h-4" />} />
             </div>
             <div className="space-y-2">
-              <InputField name="location" label="Location Name" placeholder="Lake/River" required icon={<MapPin className="w-4 h-4" />} />
+              <InputField name="location" label="Location Name" placeholder="Lake/River" required icon={<MapPin className="w-4 h-4" />} defaultValue={editingLog?.location} />
               <button type="button" onClick={getGPS} disabled={gettingLoc} className="w-full py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 flex items-center justify-center gap-2">
                 {gettingLoc ? "Locating..." : coords ? `📍 GPS SAVED` : "📌 ADD OFFLINE GPS"}
               </button>
             </div>
-            <InputField name="bait" label="Bait/Lure" placeholder="Spinner, Fly, etc." icon={<Navigation className="w-4 h-4" />} />
+            <InputField name="bait" label="Bait/Lure" placeholder="Spinner, Fly, etc." icon={<Navigation className="w-4 h-4" />} defaultValue={editingLog?.bait} />
           </div>
           <button type="submit" disabled={isProcessing} className={`w-full font-bold py-4 rounded-2xl shadow-xl transition-all ${isProcessing ? 'bg-slate-300' : 'bg-blue-600 text-white'}`}>
-            {isProcessing ? 'Processing...' : 'Save Catch to Device'}
+            {isProcessing ? 'Processing...' : editingLog ? 'Update Catch' : 'Save Catch to Device'}
           </button>
         </form>
       </div>
