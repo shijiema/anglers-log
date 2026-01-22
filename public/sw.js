@@ -1,28 +1,23 @@
-const CACHE_NAME = 'anglers-log-v2';
-// These are the core files Vite generates that we want to keep offline
+const CACHE_NAME = 'anglers-log-v3';
+
+// We focus on caching the entry point. 
+// In a Vite build, the CSS/JS are injected into index.html.
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/src/main.jsx',
-  '/src/App.jsx',
-  '/src/index.css',
-  // Add your icon filename here once you have one in the public folder
-  '/icon.png' 
+  '/vite.svg'
 ];
 
-// 1. Installation: Save all core files to the phone's storage
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
-  // Force the waiting service worker to become the active one immediately
   self.skipWaiting();
 });
 
-// 2. Activation: Clean up old versions of the app if the CACHE_NAME changed
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -35,26 +30,38 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  return self.clients.claim();
+  self.clients.claim();
 });
 
-// 3. Fetching: Try to load from cache first, then the network
+// The Fetch Strategy:
+// 1. Try to get the latest from the network.
+// 2. If network fails (offline), look in the cache.
+// 3. If it's a page navigation and we're offline, always return index.html.
 self.addEventListener('fetch', (event) => {
-  // We only cache GET requests (standard for app files)
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      // Return the cached version if we have it, otherwise go to the internet
-      return cachedResponse || fetch(event.request).then((response) => {
-        // Optional: Cache new resources as the user discovers them
-        return response;
-      }).catch(() => {
-        // Fallback for when both cache and network fail (offline and not cached)
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
+    fetch(event.request)
+      .then((response) => {
+        // Optional: Dynamically cache new assets as they are loaded
+        if (response.status === 200) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
         }
-      });
-    })
+        return response;
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // If the user is navigating to a route while offline, return the app shell
+          if (event.request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+        });
+      })
   );
 });
