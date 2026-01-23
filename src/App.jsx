@@ -9,15 +9,21 @@ import {
   Fish, 
   Scale,
   Camera,
-  Image as ImageIcon,
   X,
   Navigation,
   HardDrive,
-  List,
-  ChevronDown,
   Edit2,
   CheckCircle2,
-  Circle
+  Circle,
+  Download,
+  Upload,
+  Wind,
+  CloudSun,
+  Thermometer,
+  FileSpreadsheet,
+  Clock,
+  Menu,
+  FileText
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -60,7 +66,6 @@ const openDB = () => {
   });
 };
 
-// --- Image Compression Utility ---
 const compressImage = (base64Str, maxWidth = 800, maxHeight = 800) => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -100,13 +105,15 @@ const App = () => {
     endDate: ''
   });
 
-  // Pagination & Multi-select State
   const [dashboardLimit, setDashboardLimit] = useState(10);
   const [reportLimit, setReportLimit] = useState(10);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  
+  const menuRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  // --- Initialize & Load Local DB Data ---
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -125,14 +132,16 @@ const App = () => {
       }
     };
     loadData();
+
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Reset pagination when filters change
-  useEffect(() => {
-    setReportLimit(10);
-  }, [filters]);
-
-  // --- Handlers ---
   const saveLog = async (logData) => {
     try {
       const db = await openDB();
@@ -162,14 +171,12 @@ const App = () => {
 
   const deleteLogs = async (idsToDelete) => {
     const count = idsToDelete.length;
-    if (window.confirm(`Delete ${count} catch${count > 1 ? 'es' : ''} from your device?`)) {
+    if (window.confirm(`Delete ${count} catch${count > 1 ? 'es' : ''}?`)) {
       try {
         const db = await openDB();
         const transaction = db.transaction(STORE_NAME, 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
-        
         idsToDelete.forEach(id => store.delete(id));
-        
         transaction.oncomplete = () => {
           setLogs(prev => prev.filter(log => !idsToDelete.includes(log.id)));
           setSelectedIds([]);
@@ -181,22 +188,72 @@ const App = () => {
     }
   };
 
-  const startEditing = (log) => {
-    setEditingLog(log);
-    setView('log');
+  const exportJSON = () => {
+    const dataStr = JSON.stringify(logs, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `anglers-log-backup-${new Date().toISOString()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
-  const toggleSelection = (id) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+  const exportCSV = () => {
+    if (logs.length === 0) return;
+    
+    const headers = ["ID", "Species", "Weight_Lbs", "Date_Time", "Location", "Bait_Lure", "Air_Temp_F", "Wind_MPH", "Notes", "Lat", "Lng"];
+    const rows = logs.map(l => [
+      l.id,
+      `"${l.species?.replace(/"/g, '""')}"`,
+      l.weight || 0,
+      l.date,
+      `"${l.location?.replace(/"/g, '""')}"`,
+      `"${l.bait?.replace(/"/g, '""')}"`,
+      l.temp || "",
+      l.wind || "",
+      `"${(l.notes || "").replace(/"/g, '""')}"`,
+      l.coords?.lat || "",
+      l.coords?.lng || ""
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `anglers-log-${new Date().toISOString().split('T')[0]}.csv`);
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
-  // --- Analytics Logic ---
+  const importData = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedLogs = JSON.parse(event.target.result);
+        if (Array.isArray(importedLogs) && window.confirm(`Import ${importedLogs.length} logs?`)) {
+          const db = await openDB();
+          const transaction = db.transaction(STORE_NAME, 'readwrite');
+          const store = transaction.objectStore(STORE_NAME);
+          importedLogs.forEach(log => {
+            const { id, ...logWithoutId } = log;
+            store.add(logWithoutId);
+          });
+          transaction.oncomplete = () => window.location.reload();
+        }
+      } catch (err) { alert("Invalid backup file."); }
+    };
+    reader.readAsText(file);
+  };
+
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
-      const isAfterStart = !filters.startDate || log.date >= filters.startDate;
-      const isBeforeEnd = !filters.endDate || log.date <= filters.endDate;
+      const logDate = log.date.split('T')[0];
+      const isAfterStart = !filters.startDate || logDate >= filters.startDate;
+      const isBeforeEnd = !filters.endDate || logDate <= filters.endDate;
       const isLocationMatch = filters.location === 'All' || log.location === filters.location;
       return isAfterStart && isBeforeEnd && isLocationMatch;
     });
@@ -217,7 +274,10 @@ const App = () => {
 
   const timelineStats = useMemo(() => {
     const days = {};
-    filteredLogs.forEach(l => { days[l.date] = (days[l.date] || 0) + 1; });
+    filteredLogs.forEach(l => { 
+      const day = l.date.split('T')[0];
+      days[day] = (days[day] || 0) + 1; 
+    });
     const sortedDates = Object.keys(days).sort();
     return {
       labels: sortedDates,
@@ -230,16 +290,46 @@ const App = () => {
     };
   }, [filteredLogs]);
 
-  const locations = ['All', ...new Set(logs.map(l => l.location))];
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans pb-24">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 px-4 py-3 shadow-sm flex justify-between items-center">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           Angler's Log <span className="text-2xl">🎣</span>
         </h1>
-        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full uppercase">
-          <HardDrive className="w-3 h-3" /> Device Storage
+        
+        <div className="flex items-center gap-3">
+          <div className="relative" ref={menuRef}>
+            <button 
+              onClick={() => setShowMenu(!showMenu)} 
+              className={`flex items-center justify-center w-9 h-9 rounded-full transition-all ${showMenu ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+              aria-label="Data Management"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl z-[60] overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Data Management</p>
+                </div>
+                <button onClick={() => { exportJSON(); setShowMenu(false); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50">
+                  <Download className="w-4 h-4 text-blue-500" /> Export JSON Backup
+                </button>
+                <button onClick={() => { exportCSV(); setShowMenu(false); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-500" /> Export Spreadsheet (CSV)
+                </button>
+                <button onClick={() => { fileInputRef.current.click(); setShowMenu(false); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3">
+                  <Upload className="w-4 h-4 text-amber-500" /> Restore from JSON
+                </button>
+                <input type="file" ref={fileInputRef} onChange={importData} accept=".json" className="hidden" />
+              </div>
+            )}
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full uppercase">
+            <HardDrive className="w-3 h-3 text-blue-500" /> 
+            <span>Local DB</span>
+          </div>
         </div>
       </header>
 
@@ -247,7 +337,7 @@ const App = () => {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-slate-400">
             <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-[10px] font-bold uppercase tracking-widest">Accessing Device DB...</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest">Waking Database...</p>
           </div>
         ) : (
           <>
@@ -255,13 +345,13 @@ const App = () => {
               <Dashboard 
                 logs={logs} 
                 onDelete={deleteLogs} 
-                onEdit={startEditing}
+                onEdit={(l) => { setEditingLog(l); setView('log'); }}
                 limit={dashboardLimit} 
                 setLimit={setDashboardLimit} 
                 selectedIds={selectedIds}
                 isSelectMode={isSelectMode}
                 setIsSelectMode={setIsSelectMode}
-                toggleSelection={toggleSelection}
+                toggleSelection={(id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
               />
             )}
             {view === 'log' && (
@@ -276,7 +366,7 @@ const App = () => {
                 logs={filteredLogs} 
                 filters={filters} 
                 setFilters={setFilters} 
-                locations={locations} 
+                locations={['All', ...new Set(logs.map(l => l.location))]} 
                 speciesStats={speciesStats} 
                 timelineStats={timelineStats}
                 limit={reportLimit}
@@ -289,9 +379,9 @@ const App = () => {
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-50">
         <div className="max-w-md mx-auto flex justify-between items-center">
-          <NavButton active={view === 'dashboard'} icon={<Home />} label="Home" onClick={() => { setView('dashboard'); setEditingLog(null); }} />
-          <NavButton active={view === 'log'} icon={<PlusCircle />} label="Log" onClick={() => { setView('log'); setEditingLog(null); }} />
-          <NavButton active={view === 'analysis'} icon={<BarChart3 />} label="Report" onClick={() => { setView('analysis'); setEditingLog(null); }} />
+          <NavButton active={view === 'dashboard'} icon={<Home />} label="Home" onClick={() => setView('dashboard')} />
+          <NavButton active={view === 'log'} icon={<PlusCircle />} label="Log" onClick={() => { setEditingLog(null); setView('log'); }} />
+          <NavButton active={view === 'analysis'} icon={<BarChart3 />} label="Report" onClick={() => setView('analysis')} />
         </div>
       </nav>
     </div>
@@ -306,18 +396,9 @@ const NavButton = ({ active, icon, label, onClick }) => (
 );
 
 const Dashboard = ({ 
-  logs, 
-  onDelete, 
-  onEdit, 
-  limit, 
-  setLimit, 
-  selectedIds, 
-  isSelectMode, 
-  setIsSelectMode, 
-  toggleSelection 
+  logs, onDelete, onEdit, limit, setLimit, selectedIds, isSelectMode, setIsSelectMode, toggleSelection
 }) => {
   const displayedLogs = logs.slice(0, limit);
-  const hasMore = logs.length > limit;
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
@@ -328,68 +409,43 @@ const Dashboard = ({
 
       <div className="space-y-4">
         <div className="flex justify-between items-end px-1">
-          <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">⏱️ Recent Activity</h2>
-          {logs.length > 0 && (
-            <div className="flex gap-2">
-              {isSelectMode ? (
-                <>
-                  <button 
-                    onClick={() => onDelete(selectedIds)}
-                    disabled={selectedIds.length === 0}
-                    className="text-[10px] font-bold uppercase px-3 py-1.5 bg-red-100 text-red-600 rounded-lg disabled:opacity-50"
-                  >
-                    Delete ({selectedIds.length})
-                  </button>
-                  <button 
-                    onClick={() => setIsSelectMode(false)}
-                    className="text-[10px] font-bold uppercase px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg"
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <button 
-                  onClick={() => setIsSelectMode(true)}
-                  className="text-[10px] font-bold uppercase px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                  Select to Delete
-                </button>
-              )}
-            </div>
-          )}
+          <h2 className="font-bold text-lg text-slate-800">⏱️ Recent Activity</h2>
+          <div className="flex items-center gap-2">
+            {logs.length > 0 && (
+              <button onClick={() => setIsSelectMode(!isSelectMode)} className="text-[10px] font-bold uppercase px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg">
+                {isSelectMode ? 'Cancel' : 'Manage List'}
+              </button>
+            )}
+          </div>
         </div>
 
+        {isSelectMode && selectedIds.length > 0 && (
+          <button onClick={() => onDelete(selectedIds)} className="w-full py-3 bg-red-500 text-white rounded-xl font-bold text-xs uppercase shadow-lg shadow-red-200 animate-in zoom-in-95">
+            Delete {selectedIds.length} Selected Entries
+          </button>
+        )}
+
         {logs.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-slate-200 text-slate-400">
-            No logs found on this device. Catch something!
+          <div className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-300 font-bold uppercase text-xs tracking-widest">
+            Logbook Empty
           </div>
         ) : (
           <>
             {displayedLogs.map(log => (
-              <div key={log.id} className="relative flex items-center gap-3">
+              <div key={log.id} className="flex items-center gap-3">
                 {isSelectMode && (
-                  <button 
-                    onClick={() => toggleSelection(log.id)}
-                    className={`transition-colors ${selectedIds.includes(log.id) ? 'text-blue-600' : 'text-slate-300'}`}
-                  >
+                  <button onClick={() => toggleSelection(log.id)} className={`transition-colors ${selectedIds.includes(log.id) ? 'text-blue-600' : 'text-slate-300'}`}>
                     {selectedIds.includes(log.id) ? <CheckCircle2 className="w-6 h-6 fill-blue-50" /> : <Circle className="w-6 h-6" />}
                   </button>
                 )}
                 <div className="flex-1">
-                  <LogCard 
-                    log={log} 
-                    onDelete={isSelectMode ? null : () => onDelete([log.id])} 
-                    onEdit={isSelectMode ? null : onEdit}
-                  />
+                  <LogCard log={log} onDelete={isSelectMode ? null : () => onDelete([log.id])} onEdit={isSelectMode ? null : onEdit} />
                 </div>
               </div>
             ))}
-            {hasMore && (
-              <button 
-                onClick={() => setLimit(prev => prev + 10)}
-                className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors"
-              >
-                <ChevronDown className="w-4 h-4" /> Load More Catches
+            {logs.length > limit && (
+              <button onClick={() => setLimit(l => l + 10)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-bold text-sm">
+                Load More
               </button>
             )}
           </>
@@ -399,68 +455,74 @@ const Dashboard = ({
   );
 };
 
-const LogCard = ({ log, onDelete, onEdit }) => (
-  <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:border-blue-200 transition-all w-full">
-    {log.photos && log.photos.length > 0 && (
-      <div className="flex gap-1 h-44 overflow-x-auto p-2 bg-slate-50 border-b border-slate-100 scrollbar-hide">
-        {log.photos.map((img, i) => (
-          <img key={i} src={img} alt="catch" className="h-full rounded-lg object-cover aspect-square flex-shrink-0" />
-        ))}
-      </div>
-    )}
-    <div className="p-4 flex justify-between items-start">
-      <div className="flex gap-3">
-        <div className="bg-blue-50 p-3 rounded-xl h-fit">
-          <Fish className="w-6 h-6 text-blue-500" />
+const LogCard = ({ log, onDelete, onEdit }) => {
+  const formattedDate = new Date(log.date).toLocaleString([], { 
+    year: 'numeric', month: 'short', day: 'numeric', 
+    hour: '2-digit', minute: '2-digit', second: '2-digit' 
+  });
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:border-blue-200 transition-all w-full">
+      {log.photos?.length > 0 && (
+        <div className="flex gap-1 h-48 overflow-x-auto p-2 bg-slate-50 border-b border-slate-100 scrollbar-hide">
+          {log.photos.map((img, i) => (
+            <img key={i} src={img} className="h-full rounded-lg object-cover aspect-square flex-shrink-0" alt="catch" />
+          ))}
         </div>
-        <div>
-          <h3 className="font-bold text-slate-800 text-lg">{log.species}</h3>
-          <p className="text-sm text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {log.location}</p>
-          <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-wider">{log.date}</p>
+      )}
+      <div className="p-4 space-y-3">
+        <div className="flex justify-between items-start">
+          <div className="flex gap-3">
+            <div className="bg-blue-50 p-3 rounded-xl h-fit">
+              <Fish className="w-6 h-6 text-blue-500" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-lg">{log.species}</h3>
+              <p className="text-sm text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {log.location}</p>
+              <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-wider flex items-center gap-1">
+                <Clock className="w-3 h-3" /> {formattedDate}
+              </p>
+            </div>
+          </div>
+          <div className="text-right flex flex-col items-end gap-2">
+            <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black">{log.weight} lbs</span>
+            <div className="flex gap-1">
+              {onEdit && <button onClick={() => onEdit(log)} className="p-2 text-slate-300 hover:text-blue-500 transition-colors"><Edit2 className="w-4 h-4" /></button>}
+              {onDelete && <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>}
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="text-right flex flex-col items-end gap-2">
-        <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">{log.weight} lbs</span>
-        <div className="flex gap-1">
-          {onEdit && (
-            <button onClick={() => onEdit(log)} className="p-2 text-slate-300 hover:text-blue-500 transition-colors">
-              <Edit2 className="w-4 h-4" />
-            </button>
-          )}
-          {onDelete && (
-            <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
+        
+        <div className="flex flex-wrap gap-2 border-t border-slate-50 pt-3">
+          {log.coords && <div className="text-[9px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded flex items-center gap-1"><Navigation className="w-3 h-3" /> {log.coords.lat.toFixed(4)}, {log.coords.lng.toFixed(4)}</div>}
+          {log.temp && <div className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded flex items-center gap-1"><Thermometer className="w-3 h-3" /> {log.temp}°F</div>}
+          {log.wind && <div className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded flex items-center gap-1"><Wind className="w-3 h-3" /> {log.wind} mph</div>}
+          {log.bait && <div className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded flex items-center gap-1"><CloudSun className="w-3 h-3" /> {log.bait}</div>}
         </div>
+
+        {log.notes && (
+          <div className="mt-2 text-xs text-slate-600 italic border-l-2 border-slate-100 pl-3 py-1">
+            "{log.notes}"
+          </div>
+        )}
       </div>
     </div>
-    {log.coords && (
-      <div className="px-4 pb-4">
-        <div className="text-[10px] font-bold text-blue-500 flex items-center gap-1 bg-blue-50 w-fit px-2 py-0.5 rounded">
-          <Navigation className="w-3 h-3" /> GPS: {log.coords.lat.toFixed(4)}, {log.coords.lng.toFixed(4)}
-        </div>
-      </div>
-    )}
-  </div>
-);
+  );
+};
 
 const LogForm = ({ onSave, editingLog, onCancel }) => {
   const [photos, setPhotos] = useState(editingLog?.photos || []);
   const [coords, setCoords] = useState(editingLog?.coords || null);
   const [gettingLoc, setGettingLoc] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const cameraInputRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  const defaultDateTime = editingLog?.date || new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19);
 
   const handleFile = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
-    if (photos.length + files.length > 2) {
-      alert("Maximum 2 photos allowed per catch.");
-      e.target.value = null;
-      return;
-    }
+    if (photos.length + files.length > 4) { alert("Max 4 photos."); return; }
     setIsProcessing(true);
     for (const file of files) {
       const reader = new FileReader();
@@ -469,44 +531,23 @@ const LogForm = ({ onSave, editingLog, onCancel }) => {
         reader.readAsDataURL(file);
       });
       const compressed = await compressImage(base64);
-      setPhotos(prev => [...prev, compressed].slice(0, 2));
+      setPhotos(prev => [...prev, compressed].slice(0, 4));
     }
     setIsProcessing(false);
     e.target.value = null;
   };
 
-  const removePhoto = (index) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const getGPS = () => {
-    setGettingLoc(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGettingLoc(false);
-      },
-      () => {
-        alert("GPS unavailable locally.");
-        setGettingLoc(false);
-      }
-    );
-  };
-
   return (
     <div className="animate-in fade-in duration-500 space-y-6 pb-4">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-colors">
-            <X className="w-6 h-6" />
-          </button>
-          <h2 className="font-bold text-xl text-slate-800 text-center">{editingLog ? 'Edit Catch' : 'New Catch Log'}</h2>
-          <div className="w-6" />
+          <button onClick={onCancel} className="text-slate-400 p-2 bg-slate-50 rounded-full"><X className="w-5 h-5" /></button>
+          <h2 className="font-black text-lg text-slate-800 uppercase tracking-tighter">{editingLog ? 'Edit Entry' : 'New Catch'}</h2>
+          <div className="w-9" />
         </div>
         
         <form onSubmit={(e) => {
           e.preventDefault();
-          if (isProcessing) return;
           const fd = new FormData(e.target);
           onSave({
             species: fd.get('species'),
@@ -514,57 +555,97 @@ const LogForm = ({ onSave, editingLog, onCancel }) => {
             date: fd.get('date'),
             location: fd.get('location'),
             bait: fd.get('bait'),
+            temp: fd.get('temp'),
+            wind: fd.get('wind'),
+            notes: fd.get('notes'),
             photos,
             coords
           });
         }} className="space-y-6">
-          <div className="space-y-3">
-            <label className="text-xs font-bold uppercase text-slate-400 tracking-wider flex justify-between">
-              <span>Local Photos (Max 2)</span>
-              {isProcessing && <span className="text-blue-500 animate-pulse text-[10px]">Processing...</span>}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
+          
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-3">Photos ({photos.length}/4)</label>
+            <div className="grid grid-cols-4 gap-2">
               {photos.map((img, i) => (
                 <div key={i} className="relative aspect-square">
                   <img src={img} className="w-full h-full object-cover rounded-xl" alt="Preview" />
-                  <button type="button" onClick={() => removePhoto(i)} className="absolute -top-1 -right-1 bg-red-500 text-white p-1 rounded-full shadow-lg">
-                    <X className="w-3 h-3" />
-                  </button>
+                  <button type="button" onClick={() => setPhotos(p => p.filter((_, idx) => idx !== i))} className="absolute -top-1 -right-1 bg-red-500 text-white p-1 rounded-full"><X className="w-3 h-3" /></button>
                 </div>
               ))}
-              {photos.length < 2 && (
-                <div className="flex gap-2 col-span-1">
-                  <button type="button" onClick={() => cameraInputRef.current.click()} className="flex-1 aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400">
-                    <Camera className="w-5 h-5" />
-                    <span className="text-[8px] font-bold mt-1 uppercase">Camera</span>
-                  </button>
-                  <button type="button" onClick={() => fileInputRef.current.click()} className="flex-1 aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400">
-                    <ImageIcon className="w-5 h-5" />
-                    <span className="text-[8px] font-bold mt-1 uppercase">Album</span>
-                  </button>
-                </div>
+              {photos.length < 4 && (
+                <button type="button" onClick={() => fileInputRef.current.click()} className="aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-300">
+                  <Camera className="w-6 h-6" />
+                </button>
               )}
             </div>
-            <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
             <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleFile} />
           </div>
 
           <div className="space-y-4">
-            <InputField name="species" label="Species" placeholder="What was it?" required icon={<Fish className="w-4 h-4" />} defaultValue={editingLog?.species} />
-            <div className="grid grid-cols-2 gap-4">
-              <InputField name="weight" label="Weight (lbs)" placeholder="0.0" type="number" step="0.1" icon={<Scale className="w-4 h-4" />} defaultValue={editingLog?.weight} />
-              <InputField name="date" label="Date" type="date" defaultValue={editingLog?.date || new Date().toISOString().split('T')[0]} icon={<Calendar className="w-4 h-4" />} />
+            <InputField name="species" label="Species" placeholder="e.g. Rainbow Trout" required icon={<Fish />} defaultValue={editingLog?.species} />
+            <div className="grid grid-cols-2 gap-3">
+              <InputField name="weight" label="Weight (lbs)" placeholder="0.0" type="number" step="0.01" icon={<Scale />} defaultValue={editingLog?.weight} />
+              <InputField name="date" label="Date & Time" type="datetime-local" step="1" required icon={<Calendar />} defaultValue={defaultDateTime} />
             </div>
-            <div className="space-y-2">
-              <InputField name="location" label="Location Name" placeholder="Lake/River" required icon={<MapPin className="w-4 h-4" />} defaultValue={editingLog?.location} />
-              <button type="button" onClick={getGPS} disabled={gettingLoc} className="w-full py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 flex items-center justify-center gap-2">
-                {gettingLoc ? "Locating..." : coords ? `📍 GPS SAVED` : "📌 ADD OFFLINE GPS"}
-              </button>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <InputField name="location" label="Location" placeholder="e.g. Blackwood River" required icon={<MapPin />} defaultValue={editingLog?.location} />
+              <InputField name="bait" label="Bait / Lure" placeholder="e.g. Silver Spinner" icon={<CloudSun />} defaultValue={editingLog?.bait} />
             </div>
-            <InputField name="bait" label="Bait/Lure" placeholder="Spinner, Fly, etc." icon={<Navigation className="w-4 h-4" />} defaultValue={editingLog?.bait} />
+            
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1 flex items-center gap-2">
+                <Navigation className="w-3 h-3" /> GPS Coordinates
+              </label>
+              <div className="flex gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setGettingLoc(true);
+                    navigator.geolocation.getCurrentPosition(
+                      (p) => { 
+                        setCoords({ lat: p.coords.latitude, lng: p.coords.longitude }); 
+                        setGettingLoc(false); 
+                      },
+                      () => { alert("GPS Access Denied"); setGettingLoc(false); }
+                    );
+                  }} 
+                  className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex-shrink-0 ${
+                    coords ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 text-slate-500 border-slate-200'
+                  }`}
+                >
+                  {gettingLoc ? "Wait..." : coords ? "Retag" : "Tag Location"}
+                </button>
+                <input 
+                  type="text" 
+                  readOnly 
+                  placeholder="Not tagged"
+                  value={coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : ''}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-500 font-mono outline-none"
+                />
+              </div>
+            </div>
           </div>
-          <button type="submit" disabled={isProcessing} className={`w-full font-bold py-4 rounded-2xl shadow-xl transition-all ${isProcessing ? 'bg-slate-300' : 'bg-blue-600 text-white'}`}>
-            {isProcessing ? 'Processing...' : editingLog ? 'Update Catch' : 'Save Catch to Device'}
+
+          <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-50">
+            <InputField name="temp" label="Temp °F" type="number" icon={<Thermometer />} defaultValue={editingLog?.temp} />
+            <InputField name="wind" label="Wind MPH" type="number" icon={<Wind />} defaultValue={editingLog?.wind} />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase mb-1.5 flex items-center gap-2 px-1 text-slate-400">
+              <FileText className="w-3 h-3" /> Notes (Optional)
+            </label>
+            <textarea 
+              name="notes"
+              placeholder="Describe the fight, the conditions, or any other details..."
+              defaultValue={editingLog?.notes}
+              className="w-full p-4 rounded-xl border outline-none transition-all text-sm bg-slate-50 border-slate-200 focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-blue-200 h-24 resize-none"
+            />
+          </div>
+
+          <button type="submit" disabled={isProcessing} className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-100 uppercase tracking-widest text-sm">
+            {editingLog ? 'Update Entry' : 'Log Catch'}
           </button>
         </form>
       </div>
@@ -572,92 +653,65 @@ const LogForm = ({ onSave, editingLog, onCancel }) => {
   );
 };
 
-const InputField = ({ label, icon, ...props }) => (
-  <div>
-    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1">
-      {icon} {label}
+const InputField = ({ label, icon, required, ...props }) => (
+  <div className="flex-1">
+    <label className={`text-[10px] font-black uppercase mb-1.5 flex items-center gap-2 px-1 ${required ? 'text-emerald-600' : 'text-slate-400'}`}>
+      {React.cloneElement(icon, { className: "w-3 h-3" })} {label} {required && '(Required)'}
     </label>
-    <input className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all" {...props} />
+    <input 
+      required={required}
+      className={`w-full p-4 rounded-xl border outline-none transition-all text-sm ${
+        required 
+          ? 'bg-emerald-50/30 border-emerald-100 focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:border-emerald-200' 
+          : 'bg-slate-50 border-slate-200 focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-blue-200'
+      }`} 
+      {...props} 
+    />
   </div>
 );
 
-const Analysis = ({ logs, filters, setFilters, locations, speciesStats, timelineStats, limit, setLimit }) => {
-  const displayedLogs = logs.slice(0, limit);
-  const hasMore = logs.length > limit;
-
-  return (
-    <div className="animate-in fade-in duration-500 space-y-6">
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-        <h2 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-blue-500" /> Catch Analysis
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <FilterSelect label="Spot" value={filters.location} options={locations} onChange={v => setFilters({...filters, location: v})} />
-          <FilterSelect label="From" type="date" value={filters.startDate} onChange={v => setFilters({...filters, startDate: v})} />
-          <FilterSelect label="To" type="date" value={filters.endDate} onChange={v => setFilters({...filters, endDate: v})} />
-        </div>
+const Analysis = ({ logs, filters, setFilters, locations, speciesStats, timelineStats, limit, setLimit }) => (
+  <div className="animate-in fade-in duration-500 space-y-6">
+    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+      <h2 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-blue-500" /> Stats</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <FilterSelect label="Spot" value={filters.location} options={locations} onChange={v => setFilters({...filters, location: v})} />
+        <FilterSelect label="From" type="date" value={filters.startDate} onChange={v => setFilters({...filters, startDate: v})} />
+        <FilterSelect label="To" type="date" value={filters.endDate} onChange={v => setFilters({...filters, endDate: v})} />
       </div>
-
-      {logs.length > 0 ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Species Distribution</h3>
-              <div className="h-48">
-                <Doughnut data={speciesStats} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10, weight: 'bold' } } } } }} />
-              </div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Catches Over Time</h3>
-              <div className="h-48">
-                <Bar data={timelineStats} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }} />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-              <List className="w-5 h-5 text-blue-500" /> Filtered Logs ({logs.length})
-            </h3>
-            <div className="space-y-4">
-              {displayedLogs.map(log => <LogCard key={log.id} log={log} />)}
-              {hasMore && (
-                <button 
-                  onClick={() => setLimit(prev => prev + 10)}
-                  className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors"
-                >
-                  <ChevronDown className="w-4 h-4" /> Load More Results
-                </button>
-              )}
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 uppercase font-bold text-[10px] tracking-widest">
-          No matches for selected filters.
-        </div>
-      )}
     </div>
-  );
-};
+    {logs.length > 0 ? (
+      <>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 h-64"><Doughnut data={speciesStats} options={{ maintainAspectRatio: false }} /></div>
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 h-64"><Bar data={timelineStats} options={{ maintainAspectRatio: false }} /></div>
+        </div>
+        <div className="space-y-4">
+          {logs.slice(0, limit).map(log => <LogCard key={log.id} log={log} />)}
+        </div>
+      </>
+    ) : <div className="text-center py-20 text-slate-300 font-bold uppercase text-xs">No records found</div>}
+  </div>
+);
 
 const FilterSelect = ({ label, type = 'select', value, options, onChange }) => (
   <div className="flex-1">
-    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wider">{label}</label>
+    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 px-1">{label}</label>
     {type === 'select' ? (
-      <select value={value} onChange={e => onChange(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm">
+      <select value={value} onChange={e => onChange(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm">
         {options.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
-    ) : (
-      <input type="date" value={value} onChange={e => onChange(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" />
-    )}
+    ) : <input type="date" value={value} onChange={e => onChange(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-sm" />}
   </div>
 );
 
 const StatCard = ({ count, label, color }) => (
-  <div className={`${color} text-white p-6 rounded-2xl shadow-lg`}>
-    <div className="text-4xl font-black">{count}</div>
-    <div className="text-[10px] uppercase font-bold text-white/70 mt-1 tracking-widest">{label}</div>
+  <div className={`${color} text-white p-6 rounded-3xl shadow-lg relative overflow-hidden`}>
+    <div className="relative z-10">
+      <div className="text-4xl font-black">{count}</div>
+      <div className="text-[10px] uppercase font-bold text-white/70 mt-1 tracking-widest">{label}</div>
+    </div>
+    <Fish className="absolute -right-4 -bottom-4 opacity-10 w-24 h-24 rotate-12" />
   </div>
 );
 
