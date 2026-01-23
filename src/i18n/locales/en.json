@@ -1,0 +1,88 @@
+{
+  "app": {
+    "title": "Angler's Log"
+  },
+  "nav": {
+    "home": "Home",
+    "log": "Log",
+    "report": "Report"
+  },
+  "menu": {
+    "exportJson": "Export JSON",
+    "exportCsv": "Export CSV",
+    "restoreJson": "Restore JSON"
+  },
+  "loading": {
+    "wakingDatabase": "Waking Database...",
+    "designingCard": "Designing Card..."
+  },
+  "dashboard": {
+    "totalCatches": "Total Catches",
+    "uniqueSpots": "Unique Spots",
+    "recentActivity": "Recent Activity",
+    "manageList": "Manage List",
+    "cancel": "Cancel",
+    "deleteSelected": "Delete {{count}} Selected Entries",
+    "logbookEmpty": "Logbook Empty",
+    "loadMore": "Load More"
+  },
+  "logCard": {
+    "sharePoster": "Share Poster",
+    "catch": "catch",
+    "lbs": "lbs",
+    "mph": "mph"
+  },
+  "logForm": {
+    "newCatch": "New Catch",
+    "editEntry": "Edit Entry",
+    "photos": "Photos ({{count}}/4)",
+    "maxPhotos": "Max 4 photos.",
+    "species": "Species",
+    "speciesPlaceholder": "e.g. Rainbow Trout",
+    "weight": "Weight (lbs)",
+    "weightPlaceholder": "0.0",
+    "dateTime": "Date & Time",
+    "location": "Location",
+    "locationPlaceholder": "e.g. Blackwood River",
+    "baitLure": "Bait / Lure",
+    "baitPlaceholder": "e.g. Silver Spinner",
+    "gpsCoordinates": "GPS Coordinates",
+    "notTagged": "Not tagged",
+    "tagLocation": "Tag Location",
+    "wait": "Wait...",
+    "retag": "Retag",
+    "gpsAccessDenied": "GPS Access Denied",
+    "tempF": "Temp °F",
+    "windMph": "Wind MPH",
+    "notesOptional": "Notes (Optional)",
+    "notesPlaceholder": "Describe the fight...",
+    "required": "(Required)",
+    "logCatch": "Log Catch",
+    "updateEntry": "Update Entry"
+  },
+  "shareModal": {
+    "sharePreview": "Share Preview",
+    "shareToSocials": "Share to Socials",
+    "helpText": "Scroll to see full preview. Native sharing on mobile, download on desktop.",
+    "noPhoto": "No Photo"
+  },
+  "shareCard": {
+    "appBranding": "ANGLER'S LOG",
+    "shareTitle": "My {{species}} Catch",
+    "shareText": "Caught a {{weight}} lbs {{species}} at {{location}}!"
+  },
+  "analysis": {
+    "stats": "Stats",
+    "spot": "Spot",
+    "from": "From",
+    "to": "To",
+    "catches": "Catches",
+    "noRecords": "No records found",
+    "all": "All"
+  },
+  "confirm": {
+    "deleteCatches": "Delete {{count}} catch(es)?",
+    "invalidBackup": "Invalid backup file.",
+    "importLogs": "Import {{count}} logs?"
+  }
+}

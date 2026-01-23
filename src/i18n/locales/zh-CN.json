@@ -1,0 +1,88 @@
+{
+  "app": {
+    "title": "钓鱼日志"
+  },
+  "nav": {
+    "home": "首页",
+    "log": "记录",
+    "report": "统计"
+  },
+  "menu": {
+    "exportJson": "导出 JSON",
+    "exportCsv": "导出 CSV",
+    "restoreJson": "恢复 JSON"
+  },
+  "loading": {
+    "wakingDatabase": "正在加载数据库...",
+    "designingCard": "正在生成卡片..."
+  },
+  "dashboard": {
+    "totalCatches": "总钓获",
+    "uniqueSpots": "钓点数",
+    "recentActivity": "最近活动",
+    "manageList": "管理列表",
+    "cancel": "取消",
+    "deleteSelected": "删除 {{count}} 条记录",
+    "logbookEmpty": "暂无记录",
+    "loadMore": "加载更多"
+  },
+  "logCard": {
+    "sharePoster": "分享海报",
+    "catch": "钓获",
+    "lbs": "磅",
+    "mph": "英里/时"
+  },
+  "logForm": {
+    "newCatch": "新钓获",
+    "editEntry": "编辑记录",
+    "photos": "照片 ({{count}}/4)",
+    "maxPhotos": "最多上传4张照片",
+    "species": "鱼种",
+    "speciesPlaceholder": "例如：虹鳟鱼",
+    "weight": "重量 (磅)",
+    "weightPlaceholder": "0.0",
+    "dateTime": "日期时间",
+    "location": "地点",
+    "locationPlaceholder": "例如：黑木河",
+    "baitLure": "饵料/拟饵",
+    "baitPlaceholder": "例如：银色旋转亮片",
+    "gpsCoordinates": "GPS 坐标",
+    "notTagged": "未标记",
+    "tagLocation": "标记位置",
+    "wait": "请稍候...",
+    "retag": "重新标记",
+    "gpsAccessDenied": "GPS 访问被拒绝",
+    "tempF": "温度 °F",
+    "windMph": "风速 MPH",
+    "notesOptional": "备注 (可选)",
+    "notesPlaceholder": "描述这次钓鱼的过程...",
+    "required": "(必填)",
+    "logCatch": "保存记录",
+    "updateEntry": "更新记录"
+  },
+  "shareModal": {
+    "sharePreview": "分享预览",
+    "shareToSocials": "分享到社交媒体",
+    "helpText": "滚动查看完整预览。手机端使用原生分享，电脑端下载图片。",
+    "noPhoto": "无照片"
+  },
+  "shareCard": {
+    "appBranding": "钓鱼日志",
+    "shareTitle": "我的{{species}}钓获",
+    "shareText": "在{{location}}钓到一条{{weight}}磅的{{species}}！"
+  },
+  "analysis": {
+    "stats": "统计数据",
+    "spot": "钓点",
+    "from": "开始日期",
+    "to": "结束日期",
+    "catches": "钓获数",
+    "noRecords": "暂无记录",
+    "all": "全部"
+  },
+  "confirm": {
+    "deleteCatches": "确定删除 {{count}} 条记录吗？",
+    "invalidBackup": "无效的备份文件",
+    "importLogs": "确定导入 {{count}} 条记录吗？"
+  }
+}

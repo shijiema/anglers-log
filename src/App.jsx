@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  Home, 
-  PlusCircle, 
-  BarChart3, 
-  Trash2, 
-  MapPin, 
-  Calendar, 
-  Fish, 
+import { useTranslation } from 'react-i18next';
+import {
+  Home,
+  PlusCircle,
+  BarChart3,
+  Trash2,
+  MapPin,
+  Calendar,
+  Fish,
   Scale,
   Camera,
   X,
@@ -96,6 +97,7 @@ const compressImage = (base64Str, maxWidth = 800, maxHeight = 800) => {
 };
 
 const App = () => {
+  const { t, i18n } = useTranslation();
   const [view, setView] = useState('dashboard');
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,15 +113,20 @@ const App = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  
+
   // Sharing States
   const [sharingLog, setSharingLog] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [shareImageUrl, setShareImageUrl] = useState(null);
   const canvasRef = useRef(null);
-  
+
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Update HTML lang attribute when language changes
+  useEffect(() => {
+    document.documentElement.lang = i18n.language;
+  }, [i18n.language]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -178,7 +185,7 @@ const App = () => {
 
   const deleteLogs = async (idsToDelete) => {
     const count = idsToDelete.length;
-    if (window.confirm(`Delete ${count} catch${count > 1 ? 'es' : ''}?`)) {
+    if (window.confirm(t('confirm.deleteCatches', { count }))) {
       try {
         const db = await openDB();
         const transaction = db.transaction(STORE_NAME, 'readwrite');
@@ -256,7 +263,7 @@ const App = () => {
             ctx.textAlign = 'center';
             ctx.fillText('🎣', width/2, photoY + photoH/2 - 30);
             ctx.font = '36px sans-serif';
-            ctx.fillText('No Photo', width/2, photoY + photoH/2 + 40);
+            ctx.fillText(t('shareModal.noPhoto'), width/2, photoY + photoH/2 + 40);
           }
           ctx.restore();
 
@@ -428,7 +435,7 @@ const App = () => {
           ctx.textAlign = 'center';
           ctx.font = 'bold 28px sans-serif';
           ctx.fillStyle = '#94a3b8';
-          ctx.fillText("ANGLER'S LOG", width / 2, height - 25);
+          ctx.fillText(t('shareCard.appBranding'), width / 2, height - 25);
 
           // Convert canvas to image URL for preview
           const imageUrl = canvas.toDataURL('image/png');
@@ -461,8 +468,8 @@ const App = () => {
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: `My ${sharingLog.species} Catch`,
-          text: `Caught a ${sharingLog.weight || ''} lbs ${sharingLog.species} at ${sharingLog.location}!`,
+          title: t('shareCard.shareTitle', { species: sharingLog.species }),
+          text: t('shareCard.shareText', { weight: sharingLog.weight || '', species: sharingLog.species, location: sharingLog.location }),
         });
       } else {
         // Fallback: download the image
@@ -519,7 +526,7 @@ const App = () => {
     reader.onload = async (event) => {
       try {
         const importedLogs = JSON.parse(event.target.result);
-        if (Array.isArray(importedLogs) && window.confirm(`Import ${importedLogs.length} logs?`)) {
+        if (Array.isArray(importedLogs) && window.confirm(t('confirm.importLogs', { count: importedLogs.length }))) {
           const db = await openDB();
           const transaction = db.transaction(STORE_NAME, 'readwrite');
           const store = transaction.objectStore(STORE_NAME);
@@ -529,7 +536,7 @@ const App = () => {
           });
           transaction.oncomplete = () => window.location.reload();
         }
-      } catch (err) { alert("Invalid backup file."); }
+      } catch (err) { alert(t('confirm.invalidBackup')); }
     };
     reader.readAsText(file);
   };
@@ -559,27 +566,27 @@ const App = () => {
 
   const timelineStats = useMemo(() => {
     const days = {};
-    filteredLogs.forEach(l => { 
+    filteredLogs.forEach(l => {
       const day = l.date.split('T')[0];
-      days[day] = (days[day] || 0) + 1; 
+      days[day] = (days[day] || 0) + 1;
     });
     const sortedDates = Object.keys(days).sort();
     return {
       labels: sortedDates,
       datasets: [{
-        label: 'Catches',
+        label: t('analysis.catches'),
         data: sortedDates.map(d => days[d]),
         backgroundColor: '#3b82f6',
         borderRadius: 4,
       }]
     };
-  }, [filteredLogs]);
+  }, [filteredLogs, t]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans pb-24">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 px-4 py-3 shadow-sm flex justify-between items-center">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-          Angler's Log <span className="text-2xl">🎣</span>
+          {t('app.title')} <span className="text-2xl">🎣</span>
         </h1>
         <div className="flex items-center gap-3">
           <div className="relative" ref={menuRef}>
@@ -588,9 +595,9 @@ const App = () => {
             </button>
             {showMenu && (
               <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl z-[60] overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
-                <button onClick={() => { exportJSON(); setShowMenu(false); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50"><Download className="w-4 h-4 text-blue-500" /> Export JSON</button>
-                <button onClick={() => { exportCSV(); setShowMenu(false); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50"><FileSpreadsheet className="w-4 h-4 text-emerald-500" /> Export CSV</button>
-                <button onClick={() => { fileInputRef.current.click(); setShowMenu(false); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3"><Upload className="w-4 h-4 text-amber-500" /> Restore JSON</button>
+                <button onClick={() => { exportJSON(); setShowMenu(false); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50"><Download className="w-4 h-4 text-blue-500" /> {t('menu.exportJson')}</button>
+                <button onClick={() => { exportCSV(); setShowMenu(false); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50"><FileSpreadsheet className="w-4 h-4 text-emerald-500" /> {t('menu.exportCsv')}</button>
+                <button onClick={() => { fileInputRef.current.click(); setShowMenu(false); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3"><Upload className="w-4 h-4 text-amber-500" /> {t('menu.restoreJson')}</button>
                 <input type="file" ref={fileInputRef} onChange={importData} accept=".json" className="hidden" />
               </div>
             )}
@@ -602,7 +609,7 @@ const App = () => {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-slate-400">
             <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-[10px] font-bold uppercase tracking-widest">Waking Database...</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest">{t('loading.wakingDatabase')}</p>
           </div>
         ) : (
           <>
@@ -630,26 +637,26 @@ const App = () => {
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
           <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden flex flex-col max-h-[95vh]">
             <div className="p-3 flex justify-between items-center border-b flex-shrink-0">
-              <h3 className="font-bold text-sm">Share Preview</h3>
+              <h3 className="font-bold text-sm">{t('shareModal.sharePreview')}</h3>
               <button onClick={() => { setSharingLog(null); setShareImageUrl(null); }} className="p-2 bg-slate-100 rounded-full"><X size={18} /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-3 bg-slate-100 min-h-0">
               {isGenerating ? (
                 <div className="py-20 flex flex-col items-center gap-4 text-slate-400">
                   <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-xs font-bold uppercase">Designing Card...</p>
+                  <p className="text-xs font-bold uppercase">{t('loading.designingCard')}</p>
                 </div>
               ) : shareImageUrl ? (
                 <div className="shadow-2xl rounded-xl overflow-hidden border-4 border-white mx-auto" style={{ maxWidth: '300px' }}>
-                  <img src={shareImageUrl} alt="Share preview" className="w-full h-auto block" />
+                  <img src={shareImageUrl} alt={t('shareModal.sharePreview')} className="w-full h-auto block" />
                 </div>
               ) : null}
             </div>
             <div className="p-4 bg-white space-y-2 flex-shrink-0 border-t">
               <button onClick={shareGeneratedImage} disabled={isGenerating || !shareImageUrl} className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                <Share2 size={18} /> Share to Socials
+                <Share2 size={18} /> {t('shareModal.shareToSocials')}
               </button>
-              <p className="text-[10px] text-center text-slate-400 leading-tight">Scroll to see full preview. Native sharing on mobile, download on desktop.</p>
+              <p className="text-[10px] text-center text-slate-400 leading-tight">{t('shareModal.helpText')}</p>
             </div>
           </div>
         </div>
@@ -657,9 +664,9 @@ const App = () => {
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 shadow-lg z-50">
         <div className="max-w-md mx-auto flex justify-between items-center">
-          <NavButton active={view === 'dashboard'} icon={<Home />} label="Home" onClick={() => setView('dashboard')} />
-          <NavButton active={view === 'log'} icon={<PlusCircle />} label="Log" onClick={() => { setEditingLog(null); setView('log'); }} />
-          <NavButton active={view === 'analysis'} icon={<BarChart3 />} label="Report" onClick={() => setView('analysis')} />
+          <NavButton active={view === 'dashboard'} icon={<Home />} label={t('nav.home')} onClick={() => setView('dashboard')} />
+          <NavButton active={view === 'log'} icon={<PlusCircle />} label={t('nav.log')} onClick={() => { setEditingLog(null); setView('log'); }} />
+          <NavButton active={view === 'analysis'} icon={<BarChart3 />} label={t('nav.report')} onClick={() => setView('analysis')} />
         </div>
       </nav>
     </div>
@@ -673,32 +680,33 @@ const NavButton = ({ active, icon, label, onClick }) => (
   </button>
 );
 
-const Dashboard = ({ 
+const Dashboard = ({
   logs, onDelete, onEdit, onShare, limit, setLimit, selectedIds, isSelectMode, setIsSelectMode, toggleSelection
 }) => {
+  const { t } = useTranslation();
   const displayedLogs = logs.slice(0, limit);
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
       <div className="grid grid-cols-2 gap-4">
-        <StatCard count={logs.length} label="Total Catches" color="bg-blue-600" />
-        <StatCard count={[...new Set(logs.map(l => l.location))].length} label="Unique Spots" color="bg-emerald-600" />
+        <StatCard count={logs.length} label={t('dashboard.totalCatches')} color="bg-blue-600" />
+        <StatCard count={[...new Set(logs.map(l => l.location))].length} label={t('dashboard.uniqueSpots')} color="bg-emerald-600" />
       </div>
       <div className="space-y-4">
         <div className="flex justify-between items-end px-1">
-          <h2 className="font-bold text-lg text-slate-800">⏱️ Recent Activity</h2>
+          <h2 className="font-bold text-lg text-slate-800">⏱️ {t('dashboard.recentActivity')}</h2>
           {logs.length > 0 && (
             <button onClick={() => setIsSelectMode(!isSelectMode)} className="text-[10px] font-bold uppercase px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg">
-              {isSelectMode ? 'Cancel' : 'Manage List'}
+              {isSelectMode ? t('dashboard.cancel') : t('dashboard.manageList')}
             </button>
           )}
         </div>
         {isSelectMode && selectedIds.length > 0 && (
           <button onClick={() => onDelete(selectedIds)} className="w-full py-3 bg-red-500 text-white rounded-xl font-bold text-xs uppercase shadow-lg shadow-red-200 animate-in zoom-in-95">
-            Delete {selectedIds.length} Selected Entries
+            {t('dashboard.deleteSelected', { count: selectedIds.length })}
           </button>
         )}
         {logs.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-300 font-bold uppercase text-xs tracking-widest">Logbook Empty</div>
+          <div className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-300 font-bold uppercase text-xs tracking-widest">{t('dashboard.logbookEmpty')}</div>
         ) : (
           <>
             {displayedLogs.map(log => (
@@ -713,7 +721,7 @@ const Dashboard = ({
                 </div>
               </div>
             ))}
-            {logs.length > limit && <button onClick={() => setLimit(l => l + 10)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-bold text-sm">Load More</button>}
+            {logs.length > limit && <button onClick={() => setLimit(l => l + 10)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-slate-500 font-bold text-sm">{t('dashboard.loadMore')}</button>}
           </>
         )}
       </div>
@@ -722,14 +730,15 @@ const Dashboard = ({
 };
 
 const LogCard = ({ log, onDelete, onEdit, onShare }) => {
-  const formattedDate = new Date(log.date).toLocaleString([], { 
+  const { t } = useTranslation();
+  const formattedDate = new Date(log.date).toLocaleString([], {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:border-blue-200 transition-all w-full group">
       {log.photos?.length > 0 && (
         <div className="flex gap-1 h-48 overflow-x-auto p-2 bg-slate-50 border-b border-slate-100 scrollbar-hide">
-          {log.photos.map((img, i) => <img key={i} src={img} className="h-full rounded-lg object-cover aspect-square flex-shrink-0" alt="catch" />)}
+          {log.photos.map((img, i) => <img key={i} src={img} className="h-full rounded-lg object-cover aspect-square flex-shrink-0" alt={t('logCard.catch')} />)}
         </div>
       )}
       <div className="p-4 space-y-3">
@@ -743,9 +752,9 @@ const LogCard = ({ log, onDelete, onEdit, onShare }) => {
             </div>
           </div>
           <div className="text-right flex flex-col items-end gap-2">
-            <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black">{log.weight} lbs</span>
+            <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black">{log.weight} {t('logCard.lbs')}</span>
             <div className="flex gap-1">
-              {onShare && <button onClick={() => onShare(log)} className="p-2 text-slate-300 hover:text-emerald-500 transition-colors" title="Share Poster"><Share2 className="w-4 h-4" /></button>}
+              {onShare && <button onClick={() => onShare(log)} className="p-2 text-slate-300 hover:text-emerald-500 transition-colors" title={t('logCard.sharePoster')}><Share2 className="w-4 h-4" /></button>}
               {onEdit && <button onClick={() => onEdit(log)} className="p-2 text-slate-300 hover:text-blue-500 transition-colors"><Edit2 className="w-4 h-4" /></button>}
               {onDelete && <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>}
             </div>
@@ -754,7 +763,7 @@ const LogCard = ({ log, onDelete, onEdit, onShare }) => {
         <div className="flex flex-wrap gap-2 border-t border-slate-50 pt-3">
           {log.coords && <div className="text-[9px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded flex items-center gap-1"><Navigation className="w-3 h-3" /> {log.coords.lat.toFixed(4)}, {log.coords.lng.toFixed(4)}</div>}
           {log.temp && <div className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded flex items-center gap-1"><Thermometer className="w-3 h-3" /> {log.temp}°F</div>}
-          {log.wind && <div className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded flex items-center gap-1"><Wind className="w-3 h-3" /> {log.wind} mph</div>}
+          {log.wind && <div className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded flex items-center gap-1"><Wind className="w-3 h-3" /> {log.wind} {t('logCard.mph')}</div>}
         </div>
         {log.notes && <div className="mt-2 text-xs text-slate-600 italic border-l-2 border-slate-100 pl-3 py-1">"{log.notes}"</div>}
       </div>
@@ -763,6 +772,7 @@ const LogCard = ({ log, onDelete, onEdit, onShare }) => {
 };
 
 const LogForm = ({ onSave, editingLog, onCancel }) => {
+  const { t } = useTranslation();
   const [photos, setPhotos] = useState(editingLog?.photos || []);
   const [coords, setCoords] = useState(editingLog?.coords || null);
   const [gettingLoc, setGettingLoc] = useState(false);
@@ -773,7 +783,7 @@ const LogForm = ({ onSave, editingLog, onCancel }) => {
   const handleFile = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
-    if (photos.length + files.length > 4) { alert("Max 4 photos."); return; }
+    if (photos.length + files.length > 4) { alert(t('logForm.maxPhotos')); return; }
     setIsProcessing(true);
     for (const file of files) {
       const reader = new FileReader();
@@ -793,7 +803,7 @@ const LogForm = ({ onSave, editingLog, onCancel }) => {
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
         <div className="flex justify-between items-center mb-6">
           <button onClick={onCancel} className="text-slate-400 p-2 bg-slate-50 rounded-full"><X className="w-5 h-5" /></button>
-          <h2 className="font-black text-lg text-slate-800 uppercase tracking-tighter">{editingLog ? 'Edit Entry' : 'New Catch'}</h2>
+          <h2 className="font-black text-lg text-slate-800 uppercase tracking-tighter">{editingLog ? t('logForm.editEntry') : t('logForm.newCatch')}</h2>
           <div className="w-9" />
         </div>
         <form onSubmit={(e) => {
@@ -802,7 +812,7 @@ const LogForm = ({ onSave, editingLog, onCancel }) => {
           onSave({ species: fd.get('species'), weight: fd.get('weight'), date: fd.get('date'), location: fd.get('location'), bait: fd.get('bait'), temp: fd.get('temp'), wind: fd.get('wind'), notes: fd.get('notes'), photos, coords });
         }} className="space-y-6">
           <div>
-            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-3">Photos ({photos.length}/4)</label>
+            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-3">{t('logForm.photos', { count: photos.length })}</label>
             <div className="grid grid-cols-4 gap-2">
               {photos.map((img, i) => (
                 <div key={i} className="relative aspect-square">
@@ -815,81 +825,84 @@ const LogForm = ({ onSave, editingLog, onCancel }) => {
             <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={handleFile} />
           </div>
           <div className="space-y-4">
-            <InputField name="species" label="Species" placeholder="e.g. Rainbow Trout" required icon={<Fish />} defaultValue={editingLog?.species} />
+            <InputField name="species" label={t('logForm.species')} placeholder={t('logForm.speciesPlaceholder')} required icon={<Fish />} defaultValue={editingLog?.species} requiredText={t('logForm.required')} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField name="weight" label="Weight (lbs)" placeholder="0.0" type="number" step="0.01" icon={<Scale />} defaultValue={editingLog?.weight} />
-              <InputField name="date" label="Date & Time" type="datetime-local" step="1" required icon={<Calendar />} defaultValue={defaultDateTime} />
+              <InputField name="weight" label={t('logForm.weight')} placeholder={t('logForm.weightPlaceholder')} type="number" step="0.01" icon={<Scale />} defaultValue={editingLog?.weight} />
+              <InputField name="date" label={t('logForm.dateTime')} type="datetime-local" step="1" required icon={<Calendar />} defaultValue={defaultDateTime} requiredText={t('logForm.required')} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <InputField name="location" label="Location" placeholder="e.g. Blackwood River" required icon={<MapPin />} defaultValue={editingLog?.location} />
-              <InputField name="bait" label="Bait / Lure" placeholder="e.g. Silver Spinner" icon={<CloudSun />} defaultValue={editingLog?.bait} />
+              <InputField name="location" label={t('logForm.location')} placeholder={t('logForm.locationPlaceholder')} required icon={<MapPin />} defaultValue={editingLog?.location} requiredText={t('logForm.required')} />
+              <InputField name="bait" label={t('logForm.baitLure')} placeholder={t('logForm.baitPlaceholder')} icon={<CloudSun />} defaultValue={editingLog?.bait} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black uppercase text-slate-400 px-1 flex items-center gap-2"><Navigation className="w-3 h-3" /> GPS Coordinates</label>
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1 flex items-center gap-2"><Navigation className="w-3 h-3" /> {t('logForm.gpsCoordinates')}</label>
               <div className="flex gap-2">
                 <button type="button" onClick={() => {
                     setGettingLoc(true);
                     navigator.geolocation.getCurrentPosition(
                       (p) => { setCoords({ lat: p.coords.latitude, lng: p.coords.longitude }); setGettingLoc(false); },
-                      () => { alert("GPS Access Denied"); setGettingLoc(false); }
+                      () => { alert(t('logForm.gpsAccessDenied')); setGettingLoc(false); }
                     );
-                  }} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex-shrink-0 ${coords ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{gettingLoc ? "Wait..." : coords ? "Retag" : "Tag Location"}</button>
-                <input type="text" readOnly placeholder="Not tagged" value={coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : ''} className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-500 font-mono outline-none" />
+                  }} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex-shrink-0 ${coords ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{gettingLoc ? t('logForm.wait') : coords ? t('logForm.retag') : t('logForm.tagLocation')}</button>
+                <input type="text" readOnly placeholder={t('logForm.notTagged')} value={coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : ''} className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-500 font-mono outline-none" />
               </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-50">
-            <InputField name="temp" label="Temp °F" type="number" icon={<Thermometer />} defaultValue={editingLog?.temp} />
-            <InputField name="wind" label="Wind MPH" type="number" icon={<Wind />} defaultValue={editingLog?.wind} />
+            <InputField name="temp" label={t('logForm.tempF')} type="number" icon={<Thermometer />} defaultValue={editingLog?.temp} />
+            <InputField name="wind" label={t('logForm.windMph')} type="number" icon={<Wind />} defaultValue={editingLog?.wind} />
           </div>
           <div>
-            <label className="text-[10px] font-black uppercase mb-1.5 flex items-center gap-2 px-1 text-slate-400"><FileText className="w-3 h-3" /> Notes (Optional)</label>
-            <textarea name="notes" placeholder="Describe the fight..." defaultValue={editingLog?.notes} className="w-full p-4 rounded-xl border outline-none transition-all text-sm bg-slate-50 border-slate-200 focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-blue-200 h-24 resize-none" />
+            <label className="text-[10px] font-black uppercase mb-1.5 flex items-center gap-2 px-1 text-slate-400"><FileText className="w-3 h-3" /> {t('logForm.notesOptional')}</label>
+            <textarea name="notes" placeholder={t('logForm.notesPlaceholder')} defaultValue={editingLog?.notes} className="w-full p-4 rounded-xl border outline-none transition-all text-sm bg-slate-50 border-slate-200 focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-blue-200 h-24 resize-none" />
           </div>
-          <button type="submit" disabled={isProcessing} className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-100 uppercase tracking-widest text-sm">{editingLog ? 'Update Entry' : 'Log Catch'}</button>
+          <button type="submit" disabled={isProcessing} className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-100 uppercase tracking-widest text-sm">{editingLog ? t('logForm.updateEntry') : t('logForm.logCatch')}</button>
         </form>
       </div>
     </div>
   );
 };
 
-const InputField = ({ label, icon, required, ...props }) => (
+const InputField = ({ label, icon, required, requiredText, ...props }) => (
   <div className="flex-1">
     <label className={`text-[10px] font-black uppercase mb-1.5 flex items-center gap-2 px-1 ${required ? 'text-emerald-600' : 'text-slate-400'}`}>
-      {React.cloneElement(icon, { className: "w-3 h-3" })} {label} {required && '(Required)'}
+      {React.cloneElement(icon, { className: "w-3 h-3" })} {label} {required && requiredText}
     </label>
     <input required={required} className={`w-full p-4 rounded-xl border outline-none transition-all text-sm ${required ? 'bg-emerald-50/30 border-emerald-100 focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:border-emerald-200' : 'bg-slate-50 border-slate-200 focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-blue-200'}`} {...props} />
   </div>
 );
 
-const Analysis = ({ logs, filters, setFilters, locations, speciesStats, timelineStats, limit, setLimit }) => (
-  <div className="animate-in fade-in duration-500 space-y-6">
-    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-      <h2 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-blue-500" /> Stats</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <FilterSelect label="Spot" value={filters.location} options={locations} onChange={v => setFilters({...filters, location: v})} />
-        <FilterSelect label="From" type="date" value={filters.startDate} onChange={v => setFilters({...filters, startDate: v})} />
-        <FilterSelect label="To" type="date" value={filters.endDate} onChange={v => setFilters({...filters, endDate: v})} />
-      </div>
-    </div>
-    {logs.length > 0 ? (
-      <>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 h-64"><Doughnut data={speciesStats} options={{ maintainAspectRatio: false }} /></div>
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 h-64"><Bar data={timelineStats} options={{ maintainAspectRatio: false }} /></div>
+const Analysis = ({ logs, filters, setFilters, locations, speciesStats, timelineStats, limit, setLimit }) => {
+  const { t } = useTranslation();
+  return (
+    <div className="animate-in fade-in duration-500 space-y-6">
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <h2 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-blue-500" /> {t('analysis.stats')}</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <FilterSelect label={t('analysis.spot')} value={filters.location} options={locations} onChange={v => setFilters({...filters, location: v})} allLabel={t('analysis.all')} />
+          <FilterSelect label={t('analysis.from')} type="date" value={filters.startDate} onChange={v => setFilters({...filters, startDate: v})} />
+          <FilterSelect label={t('analysis.to')} type="date" value={filters.endDate} onChange={v => setFilters({...filters, endDate: v})} />
         </div>
-        <div className="space-y-4">{logs.slice(0, limit).map(log => <LogCard key={log.id} log={log} />)}</div>
-      </>
-    ) : <div className="text-center py-20 text-slate-300 font-bold uppercase text-xs">No records found</div>}
-  </div>
-);
+      </div>
+      {logs.length > 0 ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 h-64"><Doughnut data={speciesStats} options={{ maintainAspectRatio: false }} /></div>
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 h-64"><Bar data={timelineStats} options={{ maintainAspectRatio: false }} /></div>
+          </div>
+          <div className="space-y-4">{logs.slice(0, limit).map(log => <LogCard key={log.id} log={log} />)}</div>
+        </>
+      ) : <div className="text-center py-20 text-slate-300 font-bold uppercase text-xs">{t('analysis.noRecords')}</div>}
+    </div>
+  );
+};
 
-const FilterSelect = ({ label, type = 'select', value, options, onChange }) => (
+const FilterSelect = ({ label, type = 'select', value, options, onChange, allLabel }) => (
   <div className="flex-1">
     <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 px-1">{label}</label>
     {type === 'select' ? (
       <select value={value} onChange={e => onChange(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm">
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
+        {options.map(o => <option key={o} value={o}>{o === 'All' && allLabel ? allLabel : o}</option>)}
       </select>
     ) : <input type="date" value={value} onChange={e => onChange(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-sm" />}
   </div>
