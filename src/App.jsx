@@ -115,6 +115,7 @@ const App = () => {
   // Sharing States
   const [sharingLog, setSharingLog] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [shareImageUrl, setShareImageUrl] = useState(null);
   const canvasRef = useRef(null);
   
   const menuRef = useRef(null);
@@ -198,155 +199,288 @@ const App = () => {
   const generateShareCard = (log) => {
     setSharingLog(log);
     setIsGenerating(true);
+    setShareImageUrl(null);
 
-    setTimeout(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      const width = 1080;
-      const height = 1920;
-      canvas.width = width;
-      canvas.height = height;
+    // Use requestAnimationFrame to ensure the modal and canvas are rendered
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) {
+          console.error('Canvas not available');
+          setIsGenerating(false);
+          return;
+        }
 
-      // Background
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, height);
+        const ctx = canvas.getContext('2d');
+        const width = 1080;
+        const height = 1920;
+        canvas.width = width;
+        canvas.height = height;
 
-      // Header Gradient
-      const grad = ctx.createLinearGradient(0, 0, 0, 450);
-      grad.addColorStop(0, '#1e3a8a');
-      grad.addColorStop(1, '#3b82f6');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, 450);
+        const drawContent = (img = null) => {
+          // Clear canvas (transparent background)
+          ctx.clearRect(0, 0, width, height);
 
-      const drawContent = (img = null) => {
-        // Photo Area
-        const photoY = 220;
-        const photoH = 800;
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(80, photoY, width - 160, photoH, 40);
-        ctx.clip();
-        
-        if (img) {
-          const aspect = img.width / img.height;
-          const targetAspect = (width - 160) / photoH;
-          let drawW, drawH, drawX, drawY;
-          if (aspect > targetAspect) {
-            drawH = photoH; drawW = photoH * aspect;
-            drawX = 80 - (drawW - (width - 160)) / 2; drawY = photoY;
+          // Subtle gradient background
+          const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+          bgGrad.addColorStop(0, '#f8fafc');
+          bgGrad.addColorStop(1, '#e2e8f0');
+          ctx.fillStyle = bgGrad;
+          ctx.fillRect(0, 0, width, height);
+
+          // Photo Area - larger, starting from top
+          const photoY = 60;
+          const photoH = 920;
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(60, photoY, width - 120, photoH, 40);
+          ctx.clip();
+
+          if (img) {
+            const aspect = img.width / img.height;
+            const targetAspect = (width - 120) / photoH;
+            let drawW, drawH, drawX, drawY;
+            if (aspect > targetAspect) {
+              drawH = photoH; drawW = photoH * aspect;
+              drawX = 60 - (drawW - (width - 120)) / 2; drawY = photoY;
+            } else {
+              drawW = width - 120; drawH = (width - 120) / aspect;
+              drawX = 60; drawY = photoY - (drawH - photoH) / 2;
+            }
+            ctx.drawImage(img, drawX, drawY, drawW, drawH);
           } else {
-            drawW = width - 160; drawH = (width - 160) / aspect;
-            drawX = 80; drawY = photoY - (drawH - photoH) / 2;
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillRect(60, photoY, width - 120, photoH);
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = 'bold 48px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('🎣', width/2, photoY + photoH/2 - 30);
+            ctx.font = '36px sans-serif';
+            ctx.fillText('No Photo', width/2, photoY + photoH/2 + 40);
           }
-          ctx.drawImage(img, drawX, drawY, drawW, drawH);
-        } else {
-          ctx.fillStyle = '#f1f5f9';
-          ctx.fillRect(80, photoY, width - 160, photoH);
-          ctx.fillStyle = '#cbd5e1';
-          ctx.font = '40px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('No Photo Attached', width/2, photoY + photoH/2);
-        }
-        ctx.restore();
+          ctx.restore();
 
-        // Species & Stats
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 90px sans-serif';
-        ctx.fillText(log.species, 80, 1120);
-        
-        ctx.font = '60px sans-serif';
-        ctx.fillStyle = '#3b82f6';
-        ctx.fillText(`${log.weight} lbs`, 80, 1200);
+          // Content card overlay at bottom of photo
+          const cardY = 1020;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.roundRect(60, cardY, width - 120, height - cardY - 60, 40);
+          ctx.fill();
 
-        ctx.font = '40px sans-serif';
-        ctx.fillStyle = '#64748b';
-        ctx.fillText(new Date(log.date).toLocaleString(), 80, 1260);
+          // Add subtle shadow effect
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+          ctx.shadowBlur = 20;
+          ctx.shadowOffsetY = -10;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.roundRect(60, cardY, width - 120, height - cardY - 60, 40);
+          ctx.fill();
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetY = 0;
 
-        // Notes
-        if (log.notes) {
-          ctx.font = 'italic 36px sans-serif';
-          ctx.fillStyle = '#475569';
-          const words = log.notes.split(' ');
-          let line = '';
-          let y = 1340;
-          for(let n = 0; n < words.length; n++) {
-            let testLine = line + words[n] + ' ';
-            if (ctx.measureText(testLine).width > width - 200 && n > 0) {
-              ctx.fillText(line, 80, y);
-              line = words[n] + ' ';
-              y += 50;
-            } else { line = testLine; }
-          }
-          ctx.fillText(line, 80, y);
-        }
+          // Species title
+          ctx.textAlign = 'left';
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 72px sans-serif';
+          ctx.fillText(log.species, 100, cardY + 80);
 
-        // Map Section
-        const mapY = 1500;
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.roundRect(80, mapY, width - 160, 320, 30);
-        ctx.fill();
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = 2;
-        for(let i=50; i<320; i+=50) {
-          ctx.beginPath(); ctx.moveTo(80, mapY+i); ctx.lineTo(width-80, mapY+i); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(80+i, mapY); ctx.lineTo(80+i, mapY+320); ctx.stroke();
-        }
+          // Weight badge
+          ctx.fillStyle = '#3b82f6';
+          ctx.beginPath();
+          ctx.roundRect(100, cardY + 100, 180, 50, 25);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 32px sans-serif';
+          ctx.fillText(`${log.weight || 0} lbs`, 130, cardY + 135);
 
-        // Pin
-        ctx.fillStyle = '#ef4444';
-        const mx = width/2; const my = mapY + 120;
-        ctx.beginPath(); ctx.arc(mx, my, 35, 0, Math.PI, true); ctx.lineTo(mx, my + 70); ctx.fill();
-        ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(mx, my, 12, 0, Math.PI*2); ctx.fill();
-
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#1e293b';
-        ctx.font = 'bold 45px sans-serif';
-        ctx.fillText(log.location, width/2, mapY + 240);
-        
-        if (log.coords) {
+          // Date/time
+          ctx.fillStyle = '#64748b';
           ctx.font = '32px sans-serif';
+          ctx.fillText(new Date(log.date).toLocaleString(), 300, cardY + 135);
+
+          // Weather info row (temp and wind)
+          let weatherY = cardY + 190;
+          let weatherX = 100;
+
+          if (log.temp) {
+            // Temperature badge
+            ctx.fillStyle = '#fef3c7';
+            ctx.beginPath();
+            ctx.roundRect(weatherX, weatherY, 140, 50, 25);
+            ctx.fill();
+            ctx.fillStyle = '#d97706';
+            ctx.font = 'bold 28px sans-serif';
+            ctx.fillText(`🌡 ${log.temp}°F`, weatherX + 20, weatherY + 35);
+            weatherX += 160;
+          }
+
+          if (log.wind) {
+            // Wind badge
+            ctx.fillStyle = '#e0f2fe';
+            ctx.beginPath();
+            ctx.roundRect(weatherX, weatherY, 160, 50, 25);
+            ctx.fill();
+            ctx.fillStyle = '#0284c7';
+            ctx.font = 'bold 28px sans-serif';
+            ctx.fillText(`💨 ${log.wind} mph`, weatherX + 20, weatherY + 35);
+          }
+
+          // Notes section
+          let notesEndY = weatherY + 70;
+          if (log.notes) {
+            ctx.font = 'italic 32px sans-serif';
+            ctx.fillStyle = '#475569';
+            const words = log.notes.split(' ');
+            let line = '';
+            let y = weatherY + 80;
+            const maxWidth = width - 200;
+            for (let n = 0; n < words.length; n++) {
+              let testLine = line + words[n] + ' ';
+              if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+                ctx.fillText(`"${line.trim()}"`, 100, y);
+                line = words[n] + ' ';
+                y += 45;
+                if (y > cardY + 250) break; // Limit notes height
+              } else {
+                line = testLine;
+              }
+            }
+            if (line.trim()) {
+              ctx.fillText(`"${line.trim()}"`, 100, y);
+              notesEndY = y + 20;
+            }
+          }
+
+          // Location Map Section (if location provided)
+          if (log.location) {
+            const mapY = Math.max(notesEndY + 30, cardY + 280);
+            const mapH = height - mapY - 140;
+            const mapW = width - 160;
+
+            // Map container with gradient
+            const mapGrad = ctx.createLinearGradient(80, mapY, 80, mapY + mapH);
+            mapGrad.addColorStop(0, '#dbeafe');
+            mapGrad.addColorStop(0.5, '#bfdbfe');
+            mapGrad.addColorStop(1, '#93c5fd');
+            ctx.fillStyle = mapGrad;
+            ctx.beginPath();
+            ctx.roundRect(80, mapY, mapW, mapH, 30);
+            ctx.fill();
+
+            // Map grid lines (subtle)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 1;
+            const gridSpacing = 60;
+            for (let i = gridSpacing; i < mapH; i += gridSpacing) {
+              ctx.beginPath();
+              ctx.moveTo(80, mapY + i);
+              ctx.lineTo(80 + mapW, mapY + i);
+              ctx.stroke();
+            }
+            for (let i = gridSpacing; i < mapW; i += gridSpacing) {
+              ctx.beginPath();
+              ctx.moveTo(80 + i, mapY);
+              ctx.lineTo(80 + i, mapY + mapH);
+              ctx.stroke();
+            }
+
+            // Location pin with shadow
+            const pinX = width / 2;
+            const pinY = mapY + mapH / 2 - 40;
+
+            // Pin shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.beginPath();
+            ctx.ellipse(pinX, pinY + 90, 30, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Pin body
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(pinX, pinY, 40, Math.PI, 0, false);
+            ctx.quadraticCurveTo(pinX + 40, pinY + 30, pinX, pinY + 80);
+            ctx.quadraticCurveTo(pinX - 40, pinY + 30, pinX - 40, pinY);
+            ctx.fill();
+
+            // Pin inner circle
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(pinX, pinY, 16, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Location name
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#1e3a8a';
+            ctx.font = 'bold 42px sans-serif';
+            const locationText = log.location.length > 25 ? log.location.substring(0, 25) + '...' : log.location;
+            ctx.fillText(locationText, width / 2, mapY + mapH - 60);
+
+            // GPS coordinates if available
+            if (log.coords) {
+              ctx.font = '28px sans-serif';
+              ctx.fillStyle = '#3b82f6';
+              ctx.fillText(`📍 ${log.coords.lat.toFixed(5)}, ${log.coords.lng.toFixed(5)}`, width / 2, mapY + mapH - 25);
+            }
+          }
+
+          // Footer branding
+          ctx.textAlign = 'center';
+          ctx.font = 'bold 28px sans-serif';
           ctx.fillStyle = '#94a3b8';
-          ctx.fillText(`GPS: ${log.coords.lat.toFixed(5)}, ${log.coords.lng.toFixed(5)}`, width/2, mapY + 285);
+          ctx.fillText("ANGLER'S LOG", width / 2, height - 25);
+
+          // Convert canvas to image URL for preview
+          const imageUrl = canvas.toDataURL('image/png');
+          setShareImageUrl(imageUrl);
+          setIsGenerating(false);
+        };
+
+        if (log.photos && log.photos.length > 0) {
+          const img = new Image();
+          img.onload = () => drawContent(img);
+          img.onerror = () => {
+            console.error('Failed to load photo, drawing without it');
+            drawContent(null);
+          };
+          img.src = log.photos[0];
+        } else {
+          drawContent();
         }
-
-        ctx.font = 'bold 32px sans-serif';
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillText("ANGLER'S LOG • CATCH RECORD", width/2, height - 60);
-
-        setIsGenerating(false);
-      };
-
-      if (log.photos && log.photos.length > 0) {
-        const img = new Image();
-        img.src = log.photos[0];
-        img.onload = () => drawContent(img);
-      } else {
-        drawContent();
-      }
-    }, 100);
+      });
+    });
   };
 
   const shareGeneratedImage = async () => {
+    if (!shareImageUrl) return;
+
     try {
-      const dataUrl = canvasRef.current.toDataURL('image/png');
-      const blob = await (await fetch(dataUrl)).blob();
+      const blob = await (await fetch(shareImageUrl)).blob();
       const file = new File([blob], 'my-catch.png', { type: 'image/png' });
 
-      if (navigator.share) {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
           title: `My ${sharingLog.species} Catch`,
+          text: `Caught a ${sharingLog.weight || ''} lbs ${sharingLog.species} at ${sharingLog.location}!`,
         });
       } else {
+        // Fallback: download the image
         const link = document.createElement('a');
-        link.download = 'my-catch.png';
-        link.href = dataUrl;
+        link.download = `catch-${sharingLog.species.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.png`;
+        link.href = shareImageUrl;
         link.click();
       }
-    } catch (e) { console.error(e); }
+
+      // Close modal after sharing
+      setSharingLog(null);
+      setShareImageUrl(null);
+    } catch (e) {
+      // User cancelled sharing - don't close modal
+      if (e.name !== 'AbortError') {
+        console.error('Share failed:', e);
+      }
+    }
   };
 
   const exportJSON = () => {
@@ -489,30 +623,33 @@ const App = () => {
         )}
       </main>
 
+      {/* Hidden canvas for generating share image */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
       {sharingLog && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 flex justify-between items-center border-b">
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden flex flex-col max-h-[95vh]">
+            <div className="p-3 flex justify-between items-center border-b flex-shrink-0">
               <h3 className="font-bold text-sm">Share Preview</h3>
-              <button onClick={() => setSharingLog(null)} className="p-2 bg-slate-100 rounded-full"><X size={18} /></button>
+              <button onClick={() => { setSharingLog(null); setShareImageUrl(null); }} className="p-2 bg-slate-100 rounded-full"><X size={18} /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-100 flex flex-col items-center">
+            <div className="flex-1 overflow-y-auto p-3 bg-slate-100 min-h-0">
               {isGenerating ? (
                 <div className="py-20 flex flex-col items-center gap-4 text-slate-400">
                   <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                   <p className="text-xs font-bold uppercase">Designing Card...</p>
                 </div>
-              ) : (
-                <div className="shadow-2xl rounded-xl overflow-hidden w-full border-4 border-white">
-                  <canvas ref={canvasRef} className="w-full h-auto block" />
+              ) : shareImageUrl ? (
+                <div className="shadow-2xl rounded-xl overflow-hidden border-4 border-white mx-auto" style={{ maxWidth: '300px' }}>
+                  <img src={shareImageUrl} alt="Share preview" className="w-full h-auto block" />
                 </div>
-              )}
+              ) : null}
             </div>
-            <div className="p-6 bg-white space-y-3">
-              <button onClick={shareGeneratedImage} disabled={isGenerating} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+            <div className="p-4 bg-white space-y-2 flex-shrink-0 border-t">
+              <button onClick={shareGeneratedImage} disabled={isGenerating || !shareImageUrl} className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Share2 size={18} /> Share to Socials
               </button>
-              <p className="text-[10px] text-center text-slate-400 leading-tight">Native sharing will trigger. On desktop, this will download the image.</p>
+              <p className="text-[10px] text-center text-slate-400 leading-tight">Scroll to see full preview. Native sharing on mobile, download on desktop.</p>
             </div>
           </div>
         </div>
