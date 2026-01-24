@@ -62,6 +62,11 @@
   },
   "shareModal": {
     "sharePreview": "Share Preview",
+    "chooseShareType": "Choose Share Type",
+    "publicShare": "Public",
+    "publicShareDesc": "Without location and map",
+    "friendShare": "Friend",
+    "friendShareDesc": "With location and map",
     "shareToSocials": "Share to Socials",
     "helpText": "Scroll to see full preview. Native sharing on mobile, download on desktop.",
     "noPhoto": "No Photo"
@@ -69,7 +74,8 @@
   "shareCard": {
     "appBranding": "ANGLER'S LOG",
     "shareTitle": "My {{species}} Catch",
-    "shareText": "Caught a {{weight}} lbs {{species}} at {{location}}!"
+    "shareText": "Caught a {{weight}} lbs {{species}} at {{location}}!",
+    "shareTextPublic": "Caught a {{weight}} lbs {{species}}!"
   },
   "analysis": {
     "stats": "Stats",

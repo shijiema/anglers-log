@@ -62,6 +62,11 @@
   },
   "shareModal": {
     "sharePreview": "分享预览",
+    "chooseShareType": "选择分享方式",
+    "publicShare": "公开",
+    "publicShareDesc": "不包含位置和地图",
+    "friendShare": "好友",
+    "friendShareDesc": "包含位置和地图",
     "shareToSocials": "分享到社交媒体",
     "helpText": "滚动查看完整预览。手机端使用原生分享，电脑端下载图片。",
     "noPhoto": "无照片"
@@ -69,7 +74,8 @@
   "shareCard": {
     "appBranding": "钓鱼日志",
     "shareTitle": "我的{{species}}钓获",
-    "shareText": "在{{location}}钓到一条{{weight}}磅的{{species}}！"
+    "shareText": "在{{location}}钓到一条{{weight}}磅的{{species}}！",
+    "shareTextPublic": "钓到一条{{weight}}磅的{{species}}！"
   },
   "analysis": {
     "stats": "统计数据",

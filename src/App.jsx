@@ -116,6 +116,7 @@ const App = () => {
 
   // Sharing States
   const [sharingLog, setSharingLog] = useState(null);
+  const [shareMode, setShareMode] = useState(null); // 'public' or 'friend'
   const [isGenerating, setIsGenerating] = useState(false);
   const [shareImageUrl, setShareImageUrl] = useState(null);
   const canvasRef = useRef(null);
@@ -203,10 +204,18 @@ const App = () => {
   };
 
   // --- Sharing Logic ---
-  const generateShareCard = (log) => {
+  const initiateShare = (log) => {
     setSharingLog(log);
+    setShareMode(null);
+    setShareImageUrl(null);
+  };
+
+  const generateShareCard = (mode) => {
+    if (!sharingLog) return;
+    setShareMode(mode);
     setIsGenerating(true);
     setShareImageUrl(null);
+    const log = sharingLog;
 
     // Use requestAnimationFrame to ensure the modal and canvas are rendered
     requestAnimationFrame(() => {
@@ -220,7 +229,8 @@ const App = () => {
 
         const ctx = canvas.getContext('2d');
         const width = 1080;
-        const height = 1920;
+        // Use shorter height for public mode (no map)
+        const height = mode === 'public' ? 1400 : 1920;
         canvas.width = width;
         canvas.height = height;
 
@@ -335,6 +345,8 @@ const App = () => {
 
           // Notes section
           let notesEndY = weatherY + 70;
+          // Allow more lines for public mode since there's no map
+          const notesMaxY = mode === 'public' ? cardY + 450 : cardY + 250;
           if (log.notes) {
             ctx.font = 'italic 32px sans-serif';
             ctx.fillStyle = '#475569';
@@ -348,7 +360,7 @@ const App = () => {
                 ctx.fillText(`"${line.trim()}"`, 100, y);
                 line = words[n] + ' ';
                 y += 45;
-                if (y > cardY + 250) break; // Limit notes height
+                if (y > notesMaxY) break; // Limit notes height
               } else {
                 line = testLine;
               }
@@ -359,8 +371,8 @@ const App = () => {
             }
           }
 
-          // Location Map Section (if location provided)
-          if (log.location) {
+          // Location Map Section (if location provided and not public mode)
+          if (log.location && mode === 'friend') {
             const mapY = Math.max(notesEndY + 30, cardY + 280);
             const mapH = height - mapY - 140;
             const mapW = width - 160;
@@ -466,10 +478,13 @@ const App = () => {
       const file = new File([blob], 'my-catch.png', { type: 'image/png' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        const shareText = shareMode === 'public'
+          ? t('shareCard.shareTextPublic', { weight: sharingLog.weight || '', species: sharingLog.species })
+          : t('shareCard.shareText', { weight: sharingLog.weight || '', species: sharingLog.species, location: sharingLog.location });
         await navigator.share({
           files: [file],
           title: t('shareCard.shareTitle', { species: sharingLog.species }),
-          text: t('shareCard.shareText', { weight: sharingLog.weight || '', species: sharingLog.species, location: sharingLog.location }),
+          text: shareText,
         });
       } else {
         // Fallback: download the image
@@ -614,10 +629,10 @@ const App = () => {
         ) : (
           <>
             {view === 'dashboard' && (
-              <Dashboard 
-                logs={logs} onDelete={deleteLogs} 
+              <Dashboard
+                logs={logs} onDelete={deleteLogs}
                 onEdit={(l) => { setEditingLog(l); setView('log'); }}
-                onShare={generateShareCard}
+                onShare={initiateShare}
                 limit={dashboardLimit} setLimit={setDashboardLimit} 
                 selectedIds={selectedIds} isSelectMode={isSelectMode}
                 setIsSelectMode={setIsSelectMode}
@@ -637,27 +652,48 @@ const App = () => {
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
           <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden flex flex-col max-h-[95vh]">
             <div className="p-3 flex justify-between items-center border-b flex-shrink-0">
-              <h3 className="font-bold text-sm">{t('shareModal.sharePreview')}</h3>
-              <button onClick={() => { setSharingLog(null); setShareImageUrl(null); }} className="p-2 bg-slate-100 rounded-full"><X size={18} /></button>
+              <h3 className="font-bold text-sm">{shareMode ? t('shareModal.sharePreview') : t('shareModal.chooseShareType')}</h3>
+              <button onClick={() => { setSharingLog(null); setShareMode(null); setShareImageUrl(null); }} className="p-2 bg-slate-100 rounded-full"><X size={18} /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 bg-slate-100 min-h-0">
-              {isGenerating ? (
-                <div className="py-20 flex flex-col items-center gap-4 text-slate-400">
-                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-xs font-bold uppercase">{t('loading.designingCard')}</p>
+            {!shareMode ? (
+              <div className="p-4 space-y-3">
+                <button
+                  onClick={() => generateShareCard('public')}
+                  className="w-full p-4 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
+                >
+                  <div className="font-bold text-slate-800">{t('shareModal.publicShare')}</div>
+                  <div className="text-xs text-slate-500 mt-1">{t('shareModal.publicShareDesc')}</div>
+                </button>
+                <button
+                  onClick={() => generateShareCard('friend')}
+                  className="w-full p-4 rounded-xl border-2 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all text-left"
+                >
+                  <div className="font-bold text-slate-800">{t('shareModal.friendShare')}</div>
+                  <div className="text-xs text-slate-500 mt-1">{t('shareModal.friendShareDesc')}</div>
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex-1 overflow-y-auto p-3 bg-slate-100 min-h-0">
+                  {isGenerating ? (
+                    <div className="py-20 flex flex-col items-center gap-4 text-slate-400">
+                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-xs font-bold uppercase">{t('loading.designingCard')}</p>
+                    </div>
+                  ) : shareImageUrl ? (
+                    <div className="shadow-2xl rounded-xl overflow-hidden border-4 border-white mx-auto" style={{ maxWidth: '300px' }}>
+                      <img src={shareImageUrl} alt={t('shareModal.sharePreview')} className="w-full h-auto block" />
+                    </div>
+                  ) : null}
                 </div>
-              ) : shareImageUrl ? (
-                <div className="shadow-2xl rounded-xl overflow-hidden border-4 border-white mx-auto" style={{ maxWidth: '300px' }}>
-                  <img src={shareImageUrl} alt={t('shareModal.sharePreview')} className="w-full h-auto block" />
+                <div className="p-4 bg-white space-y-2 flex-shrink-0 border-t">
+                  <button onClick={shareGeneratedImage} disabled={isGenerating || !shareImageUrl} className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <Share2 size={18} /> {t('shareModal.shareToSocials')}
+                  </button>
+                  <p className="text-[10px] text-center text-slate-400 leading-tight">{t('shareModal.helpText')}</p>
                 </div>
-              ) : null}
-            </div>
-            <div className="p-4 bg-white space-y-2 flex-shrink-0 border-t">
-              <button onClick={shareGeneratedImage} disabled={isGenerating || !shareImageUrl} className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                <Share2 size={18} /> {t('shareModal.shareToSocials')}
-              </button>
-              <p className="text-[10px] text-center text-slate-400 leading-tight">{t('shareModal.helpText')}</p>
-            </div>
+              </>
+            )}
           </div>
         </div>
       )}
